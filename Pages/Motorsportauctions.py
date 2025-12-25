@@ -30,6 +30,10 @@ class MotorsportAuctions:
 
     def __init__(self, page):
         self.page = page
+        # Debug: indicate the page object was received
+        print(f"[MotorsportAuctions] Initialized with page={page}")
+
+    homeLink = "https://www.motorsportauctions.com/"
 
     async def open(self):
         """Navigate to the homepage and wait for DOM/network settle.
@@ -39,7 +43,9 @@ class MotorsportAuctions:
         failures (ads/analytics may keep network busy indefinitely).
         """
 
-        await self.page.goto("https://www.motorsportauctions.com/")
+        # Debug: starting navigation to homeLink
+        print(f"[MotorsportAuctions] open() -> navigating to {self.homeLink}")
+        await self.page.goto(self.homeLink)
         # Wait until basic DOM is loaded before performing further actions
         await wait_dom(self.page)
         try:
@@ -61,6 +67,8 @@ class MotorsportAuctions:
         (visible or not visible) is reached, with a retry limit.
         """
 
+        # Debug: show requested panel and action
+        print(f"[MotorsportAuctions] collapse_expand_Advertisements(adtype={adtype}, action={action})")
         typeHeading: Optional[Locator] = None
         inner: Optional[Locator] = None
 
@@ -107,11 +115,15 @@ class MotorsportAuctions:
         await self.page.wait_for_timeout(1000)
 
     async def extract_ad_data(self, adsList, adCount, items):
+        # Debug: starting ad extraction loop
+        print(f"[MotorsportAuctions] extract_ad_data() - processing {adCount} ads")
         for i in range(adCount):
             ad = adsList.nth(i)
             ad_data = {}
             # Ensure ad is in viewport before extracting data
             await scroll_into_view(ad)
+            # Debug: processing one ad index
+            print(f"[MotorsportAuctions] extract_ad_data - processing ad {i+1}/{adCount}")
             
             # Title: try common title attribute first, otherwise fallback to visible text
             title = ad.locator("span").first
@@ -157,13 +169,15 @@ class MotorsportAuctions:
         each click to ensure new content is loaded.
         """
 
+        # Debug: begin loading 'Load More' buttons loop for ad_type
+        print(f"[MotorsportAuctions] load_all_ads(ad_type={ad_type})")
         loadMore = "(//button[contains(., 'Load More')])"
         c=0
-        # while True:
-        while c < 2:  # limit to 3 clicks to avoid infinite loops
+        while True:
+        # while c < 2:  # limit to 3 clicks to avoid infinite loops
             c+=1
             loadMoreCount = await self.page.locator(loadMore).count()
-            print(f"Found {loadMoreCount} 'Load More' buttons")
+            print(f"[MotorsportAuctions] Found {loadMoreCount} 'Load More' buttons")
             if loadMoreCount > 1:
                 if ad_type == "recent":
                     await safe_click(self.page.locator(loadMore).first)
@@ -195,6 +209,8 @@ class MotorsportAuctions:
             List[Dict]: list of ad metadata dictionaries.
         """
 
+        # Debug: collect started
+        print("[MotorsportAuctions] collect() - start")
         # Small initial pause to ensure any last rendering completes
         await self.page.wait_for_timeout(1000)
 
@@ -209,11 +225,11 @@ class MotorsportAuctions:
         # All Recent adverts containers match id pattern 'advert_id_'
         adsList = self.page.locator("//div[contains(@id,'advert_id_')]")
         adCount = await adsList.count()
-        print(f"Found {adCount} ads")
+        print(f"[MotorsportAuctions] Found {adCount} ads")
 
         items = await self.extract_ad_data(adsList, adCount, items)
         
-        print(f"Collected Recent Adverts {len(items)} ads")
+        print(f"[MotorsportAuctions] Collected Recent Adverts {len(items)} ads")
         
         # Collapse the recent advertisement section header (if present) to get stable layout
         await self.collapse_expand_Advertisements("recent")
@@ -227,18 +243,19 @@ class MotorsportAuctions:
         # All Featured adverts containers match id pattern 'featured_id_'
         adsList = self.page.locator("//div[contains(@id,'featured_id_')]")
         adCount = await adsList.count()
-        print(f"Found {adCount} featured ads")
+        print(f"[MotorsportAuctions] Found {adCount} featured ads")
 
         items.extend(await self.extract_ad_data(adsList, adCount, items))
-        print(f"Collected Featured Adverts, total {len(items)} ads")
+        print(f"[MotorsportAuctions] Collected Featured Adverts, total {len(items)} ads")
         
         # Small initial pause to ensure any last rendering completes
         await self.page.wait_for_timeout(10000)
         
         # Metadata describing the collection
-        meta = {"source": "motorsportauctions.com", "records": len(items)}
+        meta = {"source": self.homeLink, "records": len(items)}
 
         # Persist results to Excel; `as_excel` will create a metadata sheet
+        print(f"[MotorsportAuctions] Saving {len(items)} records to motorsport_auctions.xlsx")
         as_excel(items, meta=meta, file_path="motorsport_auctions.xlsx")
 
         return items
