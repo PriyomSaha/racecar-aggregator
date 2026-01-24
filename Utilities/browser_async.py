@@ -25,7 +25,7 @@
 
 from playwright.async_api import async_playwright
 
-async def get_page(headless=False, user_agent=None):
+async def get_page(headless=True, user_agent=None):
     pw = await async_playwright().start()
 
     browser = await pw.chromium.launch(
