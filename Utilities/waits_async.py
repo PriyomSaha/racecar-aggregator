@@ -1,6 +1,7 @@
-async def wait_dom(page, timeout=10000):
+async def wait_dom(page, timeout=300000):
     """Asynchronously wait until the DOM is fully loaded.
 
+    Default timeout is 5 minutes (300000 ms).
     Use case: ensure document.readyState becomes 'complete' before accessing
     elements that depend on initial page load in async flows.
     """
@@ -9,7 +10,7 @@ async def wait_dom(page, timeout=10000):
         timeout=timeout
     )
 
-async def wait_network(page, timeout=10000):
+async def wait_network(page, timeout=30000):
     """Asynchronously wait for network idle state.
 
     Use case: wait until network activity settles after navigation or async

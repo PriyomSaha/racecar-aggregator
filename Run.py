@@ -1,6 +1,7 @@
 import asyncio
 from screeninfo import get_monitors
 
+from Pages.Racecarsforyou import RaceCarsForYou
 from Utilities.browser_async import get_page
 from Pages.Motorsportauctions import MotorsportAuctions
 from Pages.Rallycarsforsale import RallyCarsForSale
@@ -10,6 +11,7 @@ from Pages.Rallycarsforsale import RallyCarsForSale
 SITES = {
     "motorsport": MotorsportAuctions,
     "rally": RallyCarsForSale,
+    "racecars": RaceCarsForYou,
 }
 
 
@@ -37,8 +39,9 @@ async def run(site_key):
 
 async def main():
     # Run ONE site
-    # await run("motorsport")
-    await run("rally")
+    await run("motorsport")
+    # await run("rally")
+    # await run("racecars")
 
 
 if __name__ == "__main__":
