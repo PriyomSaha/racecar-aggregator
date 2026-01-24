@@ -48,17 +48,3 @@ async def get_attr_async(locator, name: str, wait: bool = True, timeout: int = 3
         return await locator.get_attribute(name)
     except Exception:
         return None
-
-
-async def has_class_async(locator, class_name: str, wait: bool = True, timeout: int = 3000) -> bool:
-    """Return True if the locator has the specified CSS class (async).
-
-    Handles multiple classes and returns False on errors.
-    """
-    try:
-        if wait:
-            await locator.wait_for(state="attached", timeout=timeout)
-        cls = await locator.get_attribute("class") or ""
-        return class_name in cls.split()
-    except Exception:
-        return False

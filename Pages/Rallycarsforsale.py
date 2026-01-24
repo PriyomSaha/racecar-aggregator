@@ -62,6 +62,8 @@ class RallyCarsForSale:
 
         return False
 
+    # ---------------- DATE PARSING ---------------- #
+    
     async def parse_relative_date(self, text: str) -> str:
         """Convert relative time strings (e.g. '14 uur ago' or 'December 20 , 2025')
 
@@ -136,7 +138,6 @@ class RallyCarsForSale:
 
         # fallback
         return text
-
 
     # ---------------- PAGINATION ---------------- #
 
@@ -253,7 +254,7 @@ class RallyCarsForSale:
         print(f"[RallyCarsForSale] Collected Featured Adverts, total {len(items)} ads")
         
         # Small initial pause to ensure any last rendering completes
-        await self.page.wait_for_timeout(10000)
+        await self.page.wait_for_timeout(1000000)
         
         # Metadata describing the collection
         meta = {"source": self.homeLink, "records": len(items)}

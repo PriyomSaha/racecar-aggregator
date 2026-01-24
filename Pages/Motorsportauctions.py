@@ -196,6 +196,87 @@ class MotorsportAuctions:
                 continue
             break
 
+    async def gather_detailed_data(self, items):
+        """Gather detailed data for each advertisement in the list.
+
+        Use case: for each ad in the list, navigate to its detail page and
+        extract additional information (e.g., description, seller info).
+        """
+        print(f"[gather_detailed_data] Starting detailed data gather for {len(items)} items")
+        for idx, item in enumerate(items, start=1):
+            link = item.get("linkURL")
+            if not link:
+                print(f"[gather_detailed_data] Skipping item #{idx}: no link")
+                continue
+
+            print(f"[gather_detailed_data] Processing item #{idx}: {link}")
+            await self.page.goto(link)
+            await wait_dom(self.page)
+            print(f"[gather_detailed_data] Page loaded for item #{idx}")
+
+            # extract description
+            description_locator = self.page.locator("div.adverts-content")
+
+            # Extract full visible text in DOM order
+            description = await description_locator.inner_text()
+
+            # Normalize Windows line endings
+            description = description.replace("\r\n", "\n")
+
+            # Remove excessive trailing spaces but KEEP blank lines
+            description = "\n".join(line.rstrip() for line in description.split("\n"))
+
+            description = description.strip()
+
+            print(f"[gather_detailed_data] Extracted description for item #{idx} (length {len(description)})")
+            preview = description[:120].replace("\n", " ")
+            print(f"[gather_detailed_data] Description preview: {preview}")
+
+            item["detailedDescription"] = description
+
+            location_locator = self.page.locator(
+                "(//span[contains(text(),'Location')]//following::div)[1]"
+            )
+
+            if await location_locator.count() > 0:
+                location = await safe_text(location_locator)
+                item["location"] = location
+                print(f"[gather_detailed_data] Location for item #{idx}: {location}")
+            else:
+                item["location"] = None
+                print(f"[gather_detailed_data] Location not found for item #{idx}")
+
+            try:
+                # Contact Info Locator
+                contact_locator = self.page.locator("(//span[contains(text(),'Phone')]//following::div)[1]")
+                contact_info = await safe_text(contact_locator)
+                item["contactInfo"] = contact_info
+                print(f"[gather_detailed_data] Contact info for item #{idx}: {contact_info}")
+            except Exception:
+                print(f"[gather_detailed_data] Contact info not found for item #{idx}")
+
+    async def collect_test(self):
+        await self.collapse_expand_Advertisements("featured")
+        
+        items = []
+        adsList = self.page.locator("//div[contains(@id,'advert_id_')]")
+        adCount = await adsList.count()
+        print(f"[MotorsportAuctions] Found {adCount} ads")
+
+        items = await self.extract_ad_data(adsList, adCount, items)
+        print(f"[MotorsportAuctions] Collected {len(items)} ads")
+
+        await self.gather_detailed_data(items)
+        
+        # Metadata describing the collection
+        meta = {"source": self.homeLink, "records": len(items)}
+
+        # Persist results to Excel; `as_excel` will create a metadata sheet
+        print(f"[MotorsportAuctions] Saving {len(items)} records to motorsport_auctions.xlsx")
+        as_excel(items, meta=meta, file_path="motorsport_auctions.xlsx")
+
+        return items
+    
     async def collect(self):
         """Collect advertisement listings from the current page.
 
@@ -250,6 +331,8 @@ class MotorsportAuctions:
         
         # Small initial pause to ensure any last rendering completes
         await self.page.wait_for_timeout(10000)
+        
+        await self.gather_detailed_data(items)
         
         # Metadata describing the collection
         meta = {"source": self.homeLink, "records": len(items)}
