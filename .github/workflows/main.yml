@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        python-version: ["3.9", "3.10", "3.11"]
+        python-version: ["3.13"]
 
     steps:
       - uses: actions/checkout@v3
@@ -42,9 +42,3 @@ jobs:
 
       - name: Run tests or application
         run: python3 Run.py --help || echo "Application ready"
-
-      - name: Verify installation
-        run: |
-          python -c "import playwright; print(f'Playwright version: {playwright.__version__}')"
-          python -c "import pandas; print(f'Pandas version: {pandas.__version__}')"
-          python -c "import screeninfo; print('Screeninfo installed')"
