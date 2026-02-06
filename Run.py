@@ -17,7 +17,7 @@ SITES = {
 
 async def run(site_key):
     pw, browser, context, page = await get_page(
-        # headless=False,
+        headless=False,
     )
 
     try:

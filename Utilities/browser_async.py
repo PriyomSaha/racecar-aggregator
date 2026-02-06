@@ -27,6 +27,9 @@ from playwright.async_api import async_playwright
 
 async def get_page(headless=True, user_agent=None):
     pw = await async_playwright().start()
+    
+    import os
+    headless = os.getenv("CI", "false") == "true"
 
     browser = await pw.chromium.launch(
         headless=headless,
