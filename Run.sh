@@ -32,12 +32,32 @@ pip install -r "$requirements_path"
 echo "🌐 Installing Playwright browsers..."
 playwright install
 
-# Step 3: Create executable script with absolute paths
+# Step 3: Create executable script with absolute paths + runtime safety
 echo "#!/bin/bash" > "$script_name"
+echo "" >> "$script_name"
+
+# Existing logic (kept)
 echo "BASE_DIR=\"$BASE_DIR\"" >> "$script_name"
+
+# 🔥 NEW: detect actual script location at runtime
+echo "SCRIPT_DIR=\"\$(cd \"\$(dirname \"\$0\")\" && pwd)\"" >> "$script_name"
+
+# 🔥 NEW: ensure execution happens from script location
+echo "cd \"\$SCRIPT_DIR\"" >> "$script_name"
+
+# Existing logic (kept but improved usage)
 echo "source \"\$BASE_DIR/$venv_name/bin/activate\"" >> "$script_name"
+
+# Debug info
+echo "echo \"Running from: \$SCRIPT_DIR\"" >> "$script_name"
 echo "echo \"Using Python: \$(which python)\"" >> "$script_name"
+
+# 🔥 NEW: pass correct runtime directory to Python
+echo "export RUN_BASE_DIR=\"\$SCRIPT_DIR\"" >> "$script_name"
+
+# Existing logic (kept)
 echo "python \"$script_path\" \"\$@\"" >> "$script_name"
+
 echo "read -p \"Press enter to exit...\"" >> "$script_name"
 
 chmod +x "$script_name"

@@ -1,6 +1,11 @@
 #!/bin/bash
+
 BASE_DIR="/Users/priyom_saha/Documents/racecar-aggregator"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+cd "$SCRIPT_DIR"
 source "$BASE_DIR/venv/bin/activate"
+echo "Running from: $SCRIPT_DIR"
 echo "Using Python: $(which python)"
+export RUN_BASE_DIR="$SCRIPT_DIR"
 python "/Users/priyom_saha/Documents/racecar-aggregator/Run.py" "$@"
 read -p "Press enter to exit..."
