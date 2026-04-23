@@ -1,0 +1,16 @@
+---------------------------
+Commands
+---------------------------
+docker-compose down -v
+docker-compose up --build
+docker exec -it postgres_db psql -U docker -d docker 
+
+----------------------------
+Connecting to PG Admin
+----------------------------
+Server : any -> Car Aggregator
+Host Name / address : database
+Port : 5432
+Database : docker
+User : docker
+Password : docker

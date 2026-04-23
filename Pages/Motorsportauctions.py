@@ -12,6 +12,7 @@ from Utilities.output import as_excel
 from Utilities.scroll_async import scroll_into_view
 from Utilities.waits_async import wait_dom, wait_network
 from Utilities.state_async import is_visible
+from Utilities.id_utils import generate_id
 from typing import Optional
 from playwright.async_api import Locator
 
@@ -30,8 +31,6 @@ class MotorsportAuctions:
 
     def __init__(self, page):
         self.page = page
-        # Debug: indicate the page object was received
-        print(f"[MotorsportAuctions] Initialized with page={page}")
 
     homeLink = "https://www.motorsportauctions.com/"
 
@@ -44,7 +43,6 @@ class MotorsportAuctions:
         """
 
         # Debug: starting navigation to homeLink
-        print(f"[MotorsportAuctions] open() -> navigating to {self.homeLink}")
         await self.page.goto(self.homeLink)
         # Wait until basic DOM is loaded before performing further actions
         await wait_dom(self.page)
@@ -53,7 +51,7 @@ class MotorsportAuctions:
             await wait_network(self.page)
         except Exception as e:
             # Some sites (ads, analytics) may never reach networkidle; log and continue
-            print(f"Warning: wait_network failed or timed out: {e}")
+            print(f"Warning: network idle not reached during open(): {e}")
 
     async def collapse_expand_Advertisements(self, adtype: str = "", action: str = "collapse"):
         """Collapse or expand a chosen ad panel.
@@ -68,7 +66,6 @@ class MotorsportAuctions:
         """
 
         # Debug: show requested panel and action
-        print(f"[MotorsportAuctions] collapse_expand_Advertisements(adtype={adtype}, action={action})")
         typeHeading: Optional[Locator] = None
         inner: Optional[Locator] = None
 
@@ -106,24 +103,20 @@ class MotorsportAuctions:
         heading_text = await safe_text(typeHeading)
         visible_now = await is_visible(inner)
         if action == "collapse" and not visible_now:
-            print(f"{heading_text} collapsed")
+            pass
         elif action == "expand" and visible_now:
-            print(f"{heading_text} expanded")
+            pass
         else:
             print(f"Warning: {heading_text} did not reach requested state '{action}' after {attempts} attempts")
 
         await self.page.wait_for_timeout(1000)
 
     async def extract_ad_data(self, adsList, adCount, items):
-        # Debug: starting ad extraction loop
-        print(f"[MotorsportAuctions] extract_ad_data() - processing {adCount} ads")
         for i in range(adCount):
             ad = adsList.nth(i)
             ad_data = {}
             # Ensure ad is in viewport before extracting data
             await scroll_into_view(ad)
-            # Debug: processing one ad index
-            print(f"[MotorsportAuctions] extract_ad_data - processing ad {i+1}/{adCount}")
             
             # Title: try common title attribute first, otherwise fallback to visible text
             title = ad.locator("span").first
@@ -144,22 +137,38 @@ class MotorsportAuctions:
             ad_data["date"] = val
 
             # Image URL: prefer lazy-loaded attributes then fallback to src
-            img = ad.locator("img").first
-            try:
-                val = await img.get_attribute("nitro-lazy-src")
-            except Exception:
-                val = None
-            if not val:
-                val = await img.get_attribute("data-src") or await img.get_attribute("src") or ""
-            ad_data["imageURL"] = val
-
+            imgs = ad.locator("img")
+            count = await imgs.count()
+    
+            ad_data["imageURLs"] = await self.get_all_image_urls(imgs, count)
+            
             # Link: direct ad link
             link = ad.locator("a").first
             val = await link.get_attribute("href")
             ad_data["linkURL"] = val
 
+            # Create unique ID for the ad based on its link
+            ad_data["id"] = generate_id("MSA_", val)
             items.append(ad_data)
         return items
+
+    async def get_all_image_urls(self, imgs , count):
+        image_urls = []
+
+        for i in range(count):
+            img = imgs.nth(i)
+
+            val = await img.get_attribute("nitro-lazy-src")
+            if not val:
+                val = await img.get_attribute("data-src")
+            if not val:
+                val = await img.get_attribute("src")
+
+            if val:
+                image_urls.append(val)
+                
+        
+        return sorted(list(set(image_urls)))
 
     async def load_all_ads(self, ad_type: str):
         """Click 'Load More' buttons until all ads are loaded.
@@ -169,23 +178,18 @@ class MotorsportAuctions:
         each click to ensure new content is loaded.
         """
 
-        # Debug: begin loading 'Load More' buttons loop for ad_type
-        print(f"[MotorsportAuctions] load_all_ads(ad_type={ad_type})")
         loadMore = "(//button[contains(., 'Load More')])"
         c=0
         while True:
         # while c < 2:  # limit to 3 clicks to avoid infinite loops
             c+=1
             loadMoreCount = await self.page.locator(loadMore).count()
-            print(f"[MotorsportAuctions] Found {loadMoreCount} 'Load More' buttons")
             if loadMoreCount > 1:
                 if ad_type == "recent":
                     await safe_click(self.page.locator(loadMore).first)
-                    print("Clicking first 'Load More' (more than 1 present)")
                     
                 elif ad_type == "featured":
                     await safe_click(self.page.locator(loadMore).nth(1))
-                    print("Clicking second 'Load More' (more than 1 present)")
                 try:
                     await wait_network(self.page)
                 except Exception:
@@ -202,17 +206,13 @@ class MotorsportAuctions:
         Use case: for each ad in the list, navigate to its detail page and
         extract additional information (e.g., description, seller info).
         """
-        print(f"[gather_detailed_data] Starting detailed data gather for {len(items)} items")
         for idx, item in enumerate(items, start=1):
             link = item.get("linkURL")
             if not link:
-                print(f"[gather_detailed_data] Skipping item #{idx}: no link")
                 continue
 
-            print(f"[gather_detailed_data] Processing item #{idx}: {link}")
             await self.page.goto(link)
             await wait_dom(self.page)
-            print(f"[gather_detailed_data] Page loaded for item #{idx}")
 
             # extract description
             description_locator = self.page.locator("div.adverts-content")
@@ -228,10 +228,6 @@ class MotorsportAuctions:
 
             description = description.strip()
 
-            print(f"[gather_detailed_data] Extracted description for item #{idx} (length {len(description)})")
-            preview = description[:120].replace("\n", " ")
-            print(f"[gather_detailed_data] Description preview: {preview}")
-
             item["detailedDescription"] = description
 
             location_locator = self.page.locator(
@@ -241,19 +237,33 @@ class MotorsportAuctions:
             if await location_locator.count() > 0:
                 location = await safe_text(location_locator)
                 item["location"] = location
-                print(f"[gather_detailed_data] Location for item #{idx}: {location}")
             else:
                 item["location"] = None
-                print(f"[gather_detailed_data] Location not found for item #{idx}")
 
             try:
                 # Contact Info Locator
                 contact_locator = self.page.locator("(//span[contains(text(),'Phone')]//following::div)[1]")
                 contact_info = await safe_text(contact_locator)
                 item["contactInfo"] = contact_info
-                print(f"[gather_detailed_data] Contact info for item #{idx}: {contact_info}")
             except Exception:
-                print(f"[gather_detailed_data] Contact info not found for item #{idx}")
+                item["contactInfo"] = None
+            
+            # Extract additional image URLs if available
+            try:
+                images_locators = self.page.locator(
+                "//li[contains(@class,'wpadverts')]"
+            )              
+                imgs = images_locators.locator("img")
+                count = await imgs.count()      
+                if count > 0:
+                    item["imageURLs"] = await self.get_all_image_urls(imgs, count)
+            except Exception as e:
+                print(f"Error extracting image URLs for item #{idx}: {e}")
+            
+            # Ensure imageURLs is always a list
+            if "imageURLs" not in item:
+                item["imageURLs"] = []
+
 
     async def collect_test(self):
         await self.collapse_expand_Advertisements("featured")
@@ -261,10 +271,8 @@ class MotorsportAuctions:
         items = []
         adsList = self.page.locator("//div[contains(@id,'advert_id_')]")
         adCount = await adsList.count()
-        print(f"[MotorsportAuctions] Found {adCount} ads")
 
         items = await self.extract_ad_data(adsList, adCount, items)
-        print(f"[MotorsportAuctions] Collected {len(items)} ads")
 
         await self.gather_detailed_data(items)
         
@@ -272,7 +280,6 @@ class MotorsportAuctions:
         meta = {"source": self.homeLink, "records": len(items)}
 
         # Persist results to Excel; `as_excel` will create a metadata sheet
-        print(f"[MotorsportAuctions] Saving {len(items)} records to motorsport_auctions.xlsx")
         as_excel(items, meta=meta, file_path="motorsport_auctions.xlsx")
 
         return items
@@ -290,8 +297,6 @@ class MotorsportAuctions:
             List[Dict]: list of ad metadata dictionaries.
         """
 
-        # Debug: collect started
-        print("[MotorsportAuctions] collect() - start")
         # Small initial pause to ensure any last rendering completes
         await self.page.wait_for_timeout(1000)
 
@@ -306,11 +311,8 @@ class MotorsportAuctions:
         # All Recent adverts containers match id pattern 'advert_id_'
         adsList = self.page.locator("//div[contains(@id,'advert_id_')]")
         adCount = await adsList.count()
-        print(f"[MotorsportAuctions] Found {adCount} ads")
 
         items = await self.extract_ad_data(adsList, adCount, items)
-        
-        print(f"[MotorsportAuctions] Collected Recent Adverts {len(items)} ads")
         
         # Collapse the recent advertisement section header (if present) to get stable layout
         await self.collapse_expand_Advertisements("recent")
@@ -324,10 +326,8 @@ class MotorsportAuctions:
         # All Featured adverts containers match id pattern 'featured_id_'
         adsList = self.page.locator("//div[contains(@id,'featured_id_')]")
         adCount = await adsList.count()
-        print(f"[MotorsportAuctions] Found {adCount} featured ads")
 
         items.extend(await self.extract_ad_data(adsList, adCount, items))
-        print(f"[MotorsportAuctions] Collected Featured Adverts, total {len(items)} ads")
         
         # Small initial pause to ensure any last rendering completes
         await self.page.wait_for_timeout(10000)
@@ -338,7 +338,6 @@ class MotorsportAuctions:
         meta = {"source": self.homeLink, "records": len(items)}
 
         # Persist results to Excel; `as_excel` will create a metadata sheet
-        print(f"[MotorsportAuctions] Saving {len(items)} records to motorsport_auctions.xlsx")
         as_excel(items, meta=meta, file_path="motorsport_auctions.xlsx")
 
         return items

@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  database:
+    image: postgres:15
+    platform: linux/amd64
+    container_name: postgres_db
+    restart: always
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: docker
+      POSTGRES_PASSWORD: docker
+      # POSTGRES_DB: car_aggregator
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U docker"]
+      interval: 5s
+      retries: 5
+      timeout: 3s
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_ui
+    restart: always
+    ports:
+      - "5050:80"
+    environment:
+      PGADMIN_DEFAULT_EMAIL: priyom@gmail.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    depends_on:
+      - database
+
+  # aggregator:
+  #   build: .
+  #   container_name: scraper_app
+  #   depends_on:
+  #     database:
+  #       condition: service_healthy
+  #   environment:
+  #     DB_HOST: database
+  #     DB_NAME: exampledb
+  #     DB_USER: docker
+  #     DB_PASSWORD: docker
+  #   restart: on-failure
+
+volumes:
+  pgdata:

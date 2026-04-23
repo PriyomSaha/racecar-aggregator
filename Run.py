@@ -1,5 +1,6 @@
 import asyncio
 from screeninfo import get_monitors
+from Utilities import db_utils
 
 from Pages.Racecarsforyou import RaceCarsForYou
 from Utilities.browser_async import get_page
@@ -17,14 +18,18 @@ SITES = {
 
 async def run(site_key):
     pw, browser, context, page = await get_page(
-        headless=False,
+        headless=True,
     )
 
     try:
         site = SITES[site_key](page)
 
         await site.open()
-        data = await site.collect()
+        data = await site.collect_test()
+        # data = await site.collect()
+        
+        for item in data:
+            db_utils.upsert_product(item)
         
 
         # print(f"\nCollected {len(data)} items from {site_key}")
@@ -38,6 +43,7 @@ async def run(site_key):
 
 
 async def main():
+    db_utils.create_table()
     # Run ONE site
     await run("motorsport")
     # await run("rally")
