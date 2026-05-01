@@ -116,10 +116,18 @@ def build_payload(rows):
 
 
 # 🌐 SEND TO API
-def send_to_api(payload):
+def bulk_insert(payload):
+    
+    import requests
+
+    headers = {"api_key": "cf2344429a6641e5acf63001a74d24e4", "Content-Type": "application/json"}
+    response = requests.post("https://priyom.base44.app/api/entities/CarListing/bulk", headers=headers, 
+                             json=[{"title":"Example title","price":0,"images":[]}])
+    data = response.json()
+        
     try:
         response = requests.post(
-            "https://api.base44.com/endpoint",  # replace later
+            "https://app.base44.com/api/apps/{{app_id}}/entities/CarListing",
             headers={"Content-Type": "application/json"},
             data=payload,
             timeout=10
@@ -132,50 +140,3 @@ def send_to_api(payload):
         print("❌ API Error:", e)
         return False
 
-
-# ✅ MARK AS SYNCED
-def mark_as_synced(conn, ids):
-    cur = conn.cursor()
-
-    cur.execute("""
-        UPDATE products
-        SET is_synced = TRUE
-        WHERE unique_id = ANY(%s);
-    """, (ids,))
-
-    conn.commit()
-
-
-# 🔁 FULL SYNC PIPELINE
-def sync_pipeline():
-    conn = get_connection()
-
-    rows = get_unsynced_rows(conn)
-
-    if not rows:
-        print("✅ Nothing to sync")
-        return
-
-    payload = build_payload(rows)
-
-    success = send_to_api(payload)
-
-    if success:
-        ids = [row["unique_id"] for row in rows]
-        mark_as_synced(conn, ids)
-        print(f"✅ Synced {len(ids)} records")
-    else:
-        print("❌ Sync failed, will retry next run")
-
-    conn.close()
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute(
-        "INSERT INTO products (title, price) VALUES (%s, %s)",
-        ("Test Car", "10000")
-    )
-
-    conn.commit()
-    cur.close()
-    conn.close()
