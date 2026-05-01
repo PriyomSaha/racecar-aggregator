@@ -29,6 +29,7 @@ def create_table():
             detailed_description TEXT,
             location TEXT,
             contact_info TEXT,
+            category TEXT[],
 
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP,
@@ -47,46 +48,53 @@ def upsert_product(data):
     cur = conn.cursor()
 
     cur.execute("""
-        INSERT INTO products (
-            unique_id, title, price, date, image_urls,
-            link_url, detailed_description, location, contact_info,
-            created_at, is_synced
-        )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), FALSE)
+    INSERT INTO products (
+        unique_id, title, price, date, image_urls,
+        link_url, detailed_description, location, contact_info,
+        category, created_at, is_synced
+    )
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW(), FALSE)
 
-        ON CONFLICT (unique_id) DO UPDATE
-        SET
-            title = EXCLUDED.title,
-            price = EXCLUDED.price,
-            date = EXCLUDED.date,
-            image_urls = EXCLUDED.image_urls,
-            link_url = EXCLUDED.link_url,
-            detailed_description = EXCLUDED.detailed_description,
-            location = EXCLUDED.location,
-            contact_info = EXCLUDED.contact_info,
-            updated_at = NOW(),
-            is_synced = FALSE
+    ON CONFLICT (unique_id) DO UPDATE
+    SET
+        title = EXCLUDED.title,
+        price = EXCLUDED.price,
+        date = EXCLUDED.date,
+        image_urls = EXCLUDED.image_urls,
+        link_url = EXCLUDED.link_url,
+        detailed_description = EXCLUDED.detailed_description,
+        location = EXCLUDED.location,
+        contact_info = EXCLUDED.contact_info,
+        category = (
+                SELECT ARRAY(
+                    SELECT DISTINCT UNNEST(products.category || EXCLUDED.category)
+                )
+            ),
+        updated_at = NOW(),
+        is_synced = FALSE
 
-        WHERE
-            products.title IS DISTINCT FROM EXCLUDED.title OR
-            products.price IS DISTINCT FROM EXCLUDED.price OR
-            products.date IS DISTINCT FROM EXCLUDED.date OR
-            products.image_urls IS DISTINCT FROM EXCLUDED.image_urls OR
-            products.link_url IS DISTINCT FROM EXCLUDED.link_url OR
-            products.detailed_description IS DISTINCT FROM EXCLUDED.detailed_description OR
-            products.location IS DISTINCT FROM EXCLUDED.location OR
-            products.contact_info IS DISTINCT FROM EXCLUDED.contact_info;
-    """, (
-        data["id"],
-        data["title"],
-        data["price"],
-        data["date"],
-        data["imageURLs"],
-        data["linkURL"],
-        data["detailedDescription"],
-        data["location"],
-        data["contactInfo"]
-    ))
+    WHERE
+        products.title IS DISTINCT FROM EXCLUDED.title OR
+        products.price IS DISTINCT FROM EXCLUDED.price OR
+        products.date IS DISTINCT FROM EXCLUDED.date OR
+        products.image_urls IS DISTINCT FROM EXCLUDED.image_urls OR
+        products.link_url IS DISTINCT FROM EXCLUDED.link_url OR
+        products.detailed_description IS DISTINCT FROM EXCLUDED.detailed_description OR
+        products.location IS DISTINCT FROM EXCLUDED.location OR
+        products.contact_info IS DISTINCT FROM EXCLUDED.contact_info OR
+        products.category IS DISTINCT FROM EXCLUDED.category;
+""", (
+    data["id"],
+    data["title"],
+    data["price"],
+    data["date"],
+    data["imageURLs"],
+    data["linkURL"],
+    data["detailedDescription"],
+    data["location"],
+    data["contactInfo"],
+    data["category"]
+))
 
     conn.commit()
     cur.close()

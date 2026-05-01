@@ -40,8 +40,17 @@ def as_excel(items: list, meta: dict | None = None, file_path: str = "output.xls
         meta = {"meta": str(meta)}
     meta["last_updated"] = datetime.now().isoformat()
 
+    # Validate and filter items - ensure all are dictionaries
+    if not isinstance(items, list):
+        items = []
+    valid_items = [item for item in items if isinstance(item, dict)]
+    
+    if not valid_items:
+        print("⚠️  Warning: No valid items to write. Creating empty Excel file.")
+        valid_items = []
+
     # DataFrame
-    df = pd.DataFrame(items)
+    df = pd.DataFrame(valid_items) if valid_items else pd.DataFrame()
 
     # Write Excel
     with pd.ExcelWriter(file_path) as writer:

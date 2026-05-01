@@ -18,7 +18,7 @@ SITES = {
 
 async def run(site_key):
     pw, browser, context, page = await get_page(
-        headless=True,
+        headless=False,
     )
 
     try:
@@ -27,6 +27,7 @@ async def run(site_key):
         await site.open()
         data = await site.collect_test()
         # data = await site.collect()
+        
         
         for item in data:
             db_utils.upsert_product(item)
