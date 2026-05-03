@@ -141,7 +141,6 @@ def bulk_insert(payload):
             timeout=10
         )
 
-        print("API Status:", response.status_code)
         return response.status_code == 200
 
     except Exception as e:

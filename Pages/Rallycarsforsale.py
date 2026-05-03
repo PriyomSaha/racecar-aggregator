@@ -12,17 +12,13 @@ from Utilities.state_async import is_visible
 class RallyCarsForSale:
     def __init__(self, page):
         self.page = page
-        # Debug: indicate instance creation
-        print(f"[RallyCarsForSale] Initialized with page={page}")
     homeLink = "https://rallycarsforsale.net/"
 
     # ---------------- OPEN ---------------- #
 
     async def open(self):
-        # Debug: opening listing page
-        print(f"[RallyCarsForSale] open() -> navigating to {self.homeLink}")
         await self.page.goto(
-            f"{self.homeLink}?s=&sa=search&scat=0"
+            f"{self.homeLink}?s=&sa=search&scat=8"
         )
         await wait_dom(self.page)
         await wait_network(self.page)
@@ -32,7 +28,6 @@ class RallyCarsForSale:
 
     async def accept_cookies_if_present(self):
         # Try to accept cookie banner if present to avoid obstructions
-        print("[RallyCarsForSale] accept_cookies_if_present()")
         try:
             btn = self.page.get_by_role("button", name="Accept All").first
             if await btn.is_visible(timeout=3000):
@@ -46,7 +41,6 @@ class RallyCarsForSale:
 
     async def wait_for_page_number(self, expected_page: int, timeout: int = 7000) -> bool:
         # Wait until the page indicator shows the expected page number
-        print(f"[RallyCarsForSale] wait_for_page_number(expected_page={expected_page})")
         indicator = self.page.locator("//span[@class='total']")
         end_time = time.time() + timeout / 1000
 
@@ -63,15 +57,13 @@ class RallyCarsForSale:
         return False
 
     # ---------------- DATE PARSING ---------------- #
-    
+
     async def parse_relative_date(self, text: str) -> str:
         """Convert relative time strings (e.g. '14 uur ago' or 'December 20 , 2025')
 
         Returns a formatted date like '22 December 2025' when possible, otherwise
         returns the original text.
         """
-        # Debug: show raw input to the parser
-        print(f"[RallyCarsForSale] parse_relative_date input: {text}")
         if not text:
             return ""
 
@@ -119,6 +111,43 @@ class RallyCarsForSale:
 
         # Try parsing common explicit date formats after removing commas
         s_try = re.sub(r",", "", s).strip()
+
+        # --- ✅ DUTCH MONTH NORMALIZATION (ADDED PART) ---
+        DUTCH_TO_EN_MONTHS = {
+            "januari": "January",
+            "februari": "February",
+            "maart": "March",
+            "april": "April",
+            "mei": "May",
+            "juni": "June",
+            "juli": "July",
+            "augustus": "August",
+            "september": "September",
+            "oktober": "October",
+            "november": "November",
+            "december": "December",
+
+            # abbreviations
+            "jan": "January",
+            "feb": "February",
+            "mrt": "March",
+            "apr": "April",
+            "jun": "June",
+            "jul": "July",
+            "aug": "August",
+            "sep": "September",
+            "okt": "October",
+            "nov": "November",
+            "dec": "December",
+        }
+
+        for nl, en in DUTCH_TO_EN_MONTHS.items():
+            pattern = r"\b" + nl + r"\b"
+            if re.search(pattern, s_try, flags=re.IGNORECASE):
+                s_try = re.sub(pattern, en, s_try, flags=re.IGNORECASE)
+                break
+        # --- END ADDED PART ---
+
         formats = [
             "%B %d %Y",
             "%b %d %Y",
@@ -129,6 +158,7 @@ class RallyCarsForSale:
             "%d/%m/%Y",
             "%d-%m-%Y",
         ]
+
         for fmt in formats:
             try:
                 dt = datetime.strptime(s_try, fmt)
@@ -138,11 +168,10 @@ class RallyCarsForSale:
 
         # fallback
         return text
-
+    
     # ---------------- PAGINATION ---------------- #
 
     async def move_to_next_page(self, current_page: int) -> bool:
-        print(f"[RallyCarsForSale] move_to_next_page(current_page={current_page})")
         next_button = (
             self.page.locator(
                 "//a[contains(@class,'page-numbers') and not(contains(@class,'current'))]"
@@ -163,13 +192,12 @@ class RallyCarsForSale:
     # ---------------- EXTRACT DATA ---------------- #
     
     async def extract_ad_data(self, adsList, adCount, items):
-        print(f"[RallyCarsForSale] extract_ad_data() - processing {adCount} ads")
         for i in range(adCount):
+        # for i in range(1):
             ad = adsList.nth(i)
             ad_data = {}
             # Ensure ad is in viewport before extracting data
             await scroll_into_view(ad)
-            print(f"[RallyCarsForSale] extract_ad_data - processing ad {i+1}/{adCount}")
             
             # Title
             title = ad.locator("xpath=.//h3//a").first
@@ -189,7 +217,7 @@ class RallyCarsForSale:
                     if text and isinstance(text, str) and text.strip():
                         val = text.strip()
                     else:
-                        val = "sold"
+                        val = "Not Mentioned"
                 else:
                     val = "sold"
             except Exception:
@@ -218,7 +246,6 @@ class RallyCarsForSale:
     # ---------------- COLLECT ---------------- #
 
     async def collect(self):
-        print("[RallyCarsForSale] collect() - start")
         items = []
 
         # get last page number safely
@@ -237,8 +264,6 @@ class RallyCarsForSale:
             ad_blocks = self.page.locator("//div[contains(@class,'post-block-out')]")
             count = await ad_blocks.count()
 
-            print(f"[RallyCarsForSale] Collecting page {current_page} with {count} ads")
-
             await self.extract_ad_data(ad_blocks, count, items)
 
             if current_page == pages_count:
@@ -250,8 +275,6 @@ class RallyCarsForSale:
                 break
 
             current_page += 1
-
-        print(f"[RallyCarsForSale] Collected Featured Adverts, total {len(items)} ads")
         
         # Small initial pause to ensure any last rendering completes
         await self.page.wait_for_timeout(1000000)
@@ -260,6 +283,5 @@ class RallyCarsForSale:
         meta = {"source": self.homeLink, "records": len(items)}
 
         # Persist results to Excel; `as_excel` will create a metadata sheet
-        print(f"[RallyCarsForSale] Saving {len(items)} records to rallycars.xlsx")
         as_excel(items, meta=meta, file_path="rallycars.xlsx")
         return items

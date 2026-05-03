@@ -11,7 +11,7 @@ from Pages.Rallycarsforsale import RallyCarsForSale
 
 SITES = {
     "motorsport": MotorsportAuctions,
-    "rally": RallyCarsForSale,
+    "rallycars": RallyCarsForSale,
     "racecars": RaceCarsForYou,
 }
 
@@ -25,13 +25,8 @@ async def run(site_key):
         site = SITES[site_key](page)
 
         await site.open()
-        data = await site.collect_test()
-        # data = await site.collect()
-        
-        
-        for item in data:
-            db_utils.upsert_product(item)
-        
+        # data = await site.collect_test()
+        await site.collect()
 
         # print(f"\nCollected {len(data)} items from {site_key}")
         # for d in data[:3]:
@@ -45,9 +40,10 @@ async def run(site_key):
 
 async def main():
     db_utils.create_table()
+    
     # Run ONE site
     await run("motorsport")
-    # await run("rally")
+    # await run("rallycars")
     # await run("racecars")
 
 

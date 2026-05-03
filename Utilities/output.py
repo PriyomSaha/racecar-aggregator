@@ -19,105 +19,49 @@ def as_json(items: list, meta: dict | None = None):
 def as_excel(items: list, meta: dict | None = None, file_path: str = "output.xlsx",
              sheet_name_items: str = "Items", sheet_name_meta: str = "Metadata"):
 
-    # 🔥 Get base dir from shell script
-    BASE_DIR = os.environ.get("RUN_BASE_DIR", os.getcwd())
-
+    BASE_DIR = os.getcwd()
     OUTPUT_DIR = os.path.join(BASE_DIR, "output")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     file_path = os.path.join(OUTPUT_DIR, file_path)
 
-    print("📁 Saving Excel to:", file_path)
+    if not isinstance(items, list):
+        print("Invalid items")
+        return
 
-    # Remove existing file
+    # Convert items to DataFrame
+    new_df = pd.DataFrame([item for item in items if isinstance(item, dict)])
+
+    # If file exists → append
     if os.path.exists(file_path):
-        os.remove(file_path)
+        try:
+            old_df = pd.read_excel(file_path, sheet_name="data")
+            combined_df = pd.concat([old_df, new_df], ignore_index=True)
+        except Exception:
+            combined_df = new_df
+    else:
+        combined_df = new_df
 
     # Meta handling
     if meta is None:
         meta = {}
     if not isinstance(meta, dict):
         meta = {"meta": str(meta)}
+
     meta["last_updated"] = datetime.now().isoformat()
+    meta["total_rows"] = len(combined_df)
 
-    # Validate and filter items - ensure all are dictionaries
-    if not isinstance(items, list):
-        items = []
-    valid_items = [item for item in items if isinstance(item, dict)]
-    
-    if not valid_items:
-        print("⚠️  Warning: No valid items to write. Creating empty Excel file.")
-        valid_items = []
-
-    # DataFrame
-    df = pd.DataFrame(valid_items) if valid_items else pd.DataFrame()
-
-    # Write Excel
-    with pd.ExcelWriter(file_path) as writer:
-        df.to_excel(writer, sheet_name="data", index=False)
+    # Write file (overwrite but keep appended data)
+    with pd.ExcelWriter(file_path, engine="openpyxl", mode="w") as writer:
+        combined_df.to_excel(writer, sheet_name="data", index=False)
         pd.DataFrame([meta]).to_excel(writer, sheet_name="meta", index=False)
+def deleteoldfile(file_path: str):
+    BASE_DIR = os.getcwd()
+    OUTPUT_DIR = os.path.join(BASE_DIR, "output")
+    file_path = os.path.join(OUTPUT_DIR, file_path)
 
-    print(f"✅ Excel file saved at: {file_path}")
-
-# def as_excel(items: list, meta: dict | None = None, file_path: str = "output.xlsx",
-#              sheet_name_items: str = "Items", sheet_name_meta: str = "Metadata"):
-
-#     """Write items to an Excel file with an optional meta sheet.
-
-#     This writes the main data to a sheet named 'data' and, if `meta` is
-#     provided, writes metadata to a separate sheet named 'meta'. This
-#     preserves structure and prints cleanly in Excel viewers.
-#     """
-#     # Attempt to close any open Excel application to avoid file locks.
-#     # This uses platform-specific commands but will silently continue
-#     # if the operation fails or the platform is unsupported.
-#     try:
-#         if sys.platform == "darwin":
-#             # macOS: politely ask Microsoft Excel to quit via AppleScript
-#             subprocess.run(["osascript", "-e", "tell application \"Microsoft Excel\" to quit"], check=False)
-#             # fallback: try pkill for any lingering process
-#             subprocess.run(["pkill", "-f", "Microsoft Excel"], check=False)
-#         elif sys.platform.startswith("win"):
-#             # Windows: use taskkill to terminate Excel processes
-#             subprocess.run(["taskkill", "/f", "/im", "EXCEL.EXE"], check=False, shell=True)
-#         else:
-#             # Linux/other: try pkill
-#             subprocess.run(["pkill", "-f", "excel"], check=False)
-#     except Exception:
-#         # Ignore any errors from attempting to kill/quit Excel
-#         pass
-
-#     # If the file exists, remove it so we always start fresh
-#     try:
-#         if os.path.exists(file_path):
-#             os.remove(file_path)
-#     except Exception:
-#         # ignore removal errors and proceed to overwrite via ExcelWriter
-#         pass
-
-#     # Ensure meta is a dict and add/update last_updated timestamp
-#     if meta is None:
-#         meta = {}
-#     if not isinstance(meta, dict):
-#         meta = {"meta": str(meta)}
-#     meta["last_updated"] = datetime.now().isoformat()
-
-#     # Create DataFrame from items (handle empty list)
-#     try:
-#         df = pd.DataFrame(items)
-#     except Exception:
-#         df = pd.DataFrame()
-
-#     # Use ExcelWriter to create multiple sheets (data + optional meta)
-#     with pd.ExcelWriter(file_path) as writer:
-#         # Write main data
-#         df.to_excel(writer, sheet_name="data", index=False)
-
-#         # Write meta to separate sheet
-#         try:
-#             meta_df = pd.DataFrame([meta])
-#         except Exception:
-#             meta_df = pd.DataFrame({"meta": [str(meta)]})
-#         meta_df.to_excel(writer, sheet_name="meta", index=False)
-
-#     print(f"Excel file saved at: {file_path}")
+    if os.path.exists(file_path):
+        os.remove(file_path)
+        print(f"Deleted old file: {file_path}")
+    else:
+        print(f"No existing file to delete at: {file_path}")

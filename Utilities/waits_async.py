@@ -1,3 +1,5 @@
+import asyncio
+
 async def wait_dom(page, timeout=300000):
     """Asynchronously wait until the DOM is fully loaded.
 
@@ -38,4 +40,11 @@ async def wait_attached(locator, timeout=8000):
     Use case: confirm element exists in DOM before further async ops.
     """
     await locator.wait_for(state="attached", timeout=timeout)
+
+async def wait_for(seconds=2):
+    """Manually wait for a specified number of seconds.
+
+    Use case: add a fixed delay in async flows when needed.
+    """
+    await asyncio.sleep(seconds)
     

@@ -9,10 +9,11 @@ as async coroutines and rely on utility helpers in `Utilities`.
 
 from os import link
 
+from Utilities import db_utils
 from Utilities.actions_async import safe_click, safe_text
-from Utilities.output import as_excel
+from Utilities.output import as_excel,deleteoldfile
 from Utilities.scroll_async import scroll_into_view
-from Utilities.waits_async import wait_dom, wait_network, wait_visible
+from Utilities.waits_async import wait_dom, wait_network, wait_for
 from Utilities.state_async import is_visible
 from Utilities.id_utils import generate_id
 from typing import Optional
@@ -35,6 +36,7 @@ class MotorsportAuctions:
         self.page = page
 
     homeLink = "https://www.motorsportauctions.com/"
+    OUTPUT_FILE_NAME = "motorsport_auctions.xlsx"
 
     async def open(self):
         """Navigate to the homepage and wait for DOM/network settle.
@@ -45,9 +47,9 @@ class MotorsportAuctions:
         """
 
         # Debug: starting navigation to homeLink
-        await self.page.goto(self.homeLink)
+        await self.page.goto(self.homeLink, timeout=120000, wait_until="domcontentloaded")
         # Wait until basic DOM is loaded before performing further actions
-        await wait_dom(self.page)
+        await wait_dom(self.page,999999)
         try:
             # Wait for network idle where possible; tolerate timeouts
             await wait_network(self.page)
@@ -154,7 +156,7 @@ class MotorsportAuctions:
             
             # Add category if provided
             if category:
-                ad_data["category"] = category
+                ad_data["category"] = [category] if category else []
             
             items.append(ad_data)
         return items
@@ -217,9 +219,10 @@ class MotorsportAuctions:
             link = item.get("linkURL")
             if not link:
                 continue
-
-            await self.page.goto(link)
-            await wait_dom(self.page)
+            
+            # await wait_for(2000)  # small pause before navigation
+            await self.page.goto(link, timeout=120000, wait_until="domcontentloaded")
+            await wait_dom(self.page,100000)
             
             # Check for the error message indicating the ad page is not found; if present, skip detailed extraction
             if await self.page.locator("text=Oops! That page can’t be found.").count() > 0:
@@ -279,7 +282,8 @@ class MotorsportAuctions:
             if "imageURLs" not in item:
                 item["imageURLs"] = []
 
-    async def collect_categorized_data(self, items, category):
+    async def collect_categorized_data(self, category):
+        items =[]
         
          # Nested helper function to build category-based links
         def build_category_link(category):
@@ -291,6 +295,7 @@ class MotorsportAuctions:
             Returns:
                 str: The constructed link or None if category is unknown
             """
+            
             if category == "esports":
                 return self.homeLink + "category/20/esports.html"
             elif category == "race-cars":
@@ -317,7 +322,7 @@ class MotorsportAuctions:
             print(f"Unknown category '{category}'. Skipping.")
             return items
         
-        await self.page.goto(category_link)
+        await self.page.goto(category_link, timeout=120000, wait_until="domcontentloaded")
         await wait_dom(self.page)
         
         adsList = self.page.locator("//div[contains(@class,'middle-content')]//div[contains(@class,'advert-item-col')]")
@@ -383,7 +388,7 @@ class MotorsportAuctions:
         # items.extend(await self.collect_categorized_data([], category="touring-cars"))
         # items.extend(await self.collect_categorized_data([], category="performance-road-cars"))
         # items.extend(await self.collect_categorized_data([], category="historic-road-cars"))
-        items.extend(await self.collect_categorized_data([], category="transporters-and-support-vehicles"))
+        items.extend(await self.collect_categorized_data(category="transporters-and-support-vehicles"))
         # items.extend(await self.collect_categorized_data([], category="other-items"))
         
         
@@ -398,7 +403,8 @@ class MotorsportAuctions:
 
         return items
     
-    async def collect_featured_and_recent_ads(self, items):
+    async def collect_featured_and_recent_ads(self):
+        
         """Collect advertisement listings from the current page.
 
         Workflow / Use case:
@@ -411,6 +417,10 @@ class MotorsportAuctions:
             List[Dict]: list of ad metadata dictionaries.
         """
 
+        homeAnchor = self.page.locator("//a[normalize-space()='Home']")
+        await safe_click(homeAnchor)
+        
+        items = []
         # Small initial pause to ensure any last rendering completes
         await self.page.wait_for_timeout(1000)
 
@@ -455,6 +465,15 @@ class MotorsportAuctions:
 
         return items
 
+    async def store_in_db_excel(self, items,category):
+        for item in items:
+            db_utils.upsert_product(item)
+            
+        # Metadata describing the collection
+        meta = {"source": self.homeLink,"category": category, "records": len(items)}
+        # Persist results to Excel; `as_excel` will create a metadata sheet
+        as_excel(items, meta=meta, file_path=self.OUTPUT_FILE_NAME)
+    
     async def collect(self):
         """Main method to collect advertisement listings from the current page.
 
@@ -465,9 +484,16 @@ class MotorsportAuctions:
         Returns:
             List[Dict]: list of ad metadata dictionaries.
         """
-        items = []
+        # categories = ["esports","sports-cars", "race-cars", "rally-cars",  "touring-cars", "historic-road-cars", "performance-road-cars", "transporters-and-support-vehicles", "other-items"]
         
-        await self.collect_featured_and_recent_ads(items)
+        # deleteoldfile(self.OUTPUT_FILE_NAME)
         
-        return items
-    
+        categories = ["historic-road-cars", "performance-road-cars", "transporters-and-support-vehicles", "other-items"]
+        
+        for cat in categories:
+            items = []
+            items.extend(await self.collect_categorized_data(cat))
+            await self.store_in_db_excel(items,cat)
+        
+        # items.extend(await self.collect_featured_and_recent_ads())
+        
